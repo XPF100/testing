@@ -1,0 +1,418 @@
+---
+title: "Intro to Publication-Quality Tables in R"
+subtitle: "gtsummary, sjPlot, and table1"
+engine: knitr
+format: live-html
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{webr}
+#| warning: false
+# Setup: load packages ----
+library(tidyverse)
+library(gtsummary)
+library(sjPlot)
+library(table1)
+library(broom)
+library(rio)
+library(cardx)
+```
+
+```{webr}
+download.file("https://raw.githubusercontent.com/XPF100/testing/refs/heads/main/patients.csv", destfile = "yourfile.csv")
+```
+
+
+# 1. Overview
+
+In this tutorial you will learn how to:
+
+-   Create descriptive tables using **gtsummary::tbl_summary()**
+-   Create model summary tables using **sjPlot::tab_model()**
+-   Create classic “Table 1” style summary tables using **table1::table1()**
+-   Practice with short exercises along the way
+
+This tutorial is designed to take about **1 hour** (including reading, running code, and doing exercises).
+
+------------------------------------------------------------------------
+
+# 2. Read in a Simple Public Health Dataset
+
+We’ll start by importing a small dataset of 200 adults enrolled in a hypothetical public health study.
+
+```{webr}
+patients <- import("yourfile.csv")
+```
+
+We’ll treat:
+
+-   **Outcome** as a binary endpoint (e.g., hospitalization)
+-   **Treatment** as the exposure (Standard vs Intensive)
+-   **Age, sex, smoker, bmi** as covariates
+
+------------------------------------------------------------------------
+
+# 3. Descriptive Tables with gtsummary
+
+The **gtsummary** package makes it easy to create clean, publication-ready summary tables.
+
+## 3.1 Basic `tbl_summary()`
+
+The function `tbl_summary()` summarizes variables by default with:
+
+-   Mean & SD for continuous variables
+-   Counts & percentages for categorical variables
+
+```{webr}
+patients |>
+  select(age, sex, smoker, bmi, treatment) |>
+  tbl_summary()
+```
+
+### Add labels and formatting
+
+You can provide nicer labels with the `label` argument:
+
+```{webr}
+patients |>
+  select(age, sex, smoker, bmi, treatment) |>
+  tbl_summary(
+    label = list(
+      age ~ "Age (years)",
+      sex ~ "Sex",
+      smoker ~ "Current smoker",
+      bmi ~ "Body mass index (kg/m²)",
+      treatment ~ "Treatment arm"
+    )
+  )
+```
+
+### Stratified tables with `by =`
+
+We often want summaries **by a group**, for example by treatment arm.
+
+```{webr}
+patients |>
+  select(age, sex, smoker, bmi, treatment) |>
+  tbl_summary(
+    by = treatment,
+    label = list(
+      age ~ "Age (years)",
+      sex ~ "Sex",
+      smoker ~ "Current smoker",
+      bmi ~ "Body mass index (kg/m²)"
+    )
+  )
+```
+
+### Add p-values and overall column
+
+We can add a row of p-values comparing groups, and also an overall column.
+
+```{webr}
+tbl_gts <- patients |>
+  select(age, sex, smoker, bmi, treatment) |>
+  tbl_summary(
+    by = treatment,
+    label = list(
+      age ~ "Age (years)",
+      sex ~ "Sex",
+      smoker ~ "Current smoker",
+      bmi ~ "Body mass index (kg/m²)"
+    )
+  ) |>
+  add_overall() |>
+  add_p()
+
+tbl_gts
+```
+
+You can also modify the header (column titles):
+
+```{webr}
+tbl_gts |>
+  modify_header(label ~ "**Baseline characteristic**") |>
+  bold_labels()
+```
+
+### Exercise 1 – Descriptive tables with gtsummary
+
+**Goal:** Practice using `tbl_summary()` with different variables.
+
+1.  Create a table that:
+    -   Includes **age, sex, bmi, smoker, outcome**
+    -   Is **stratified by sex**
+    -   Includes an **overall column**
+    -   Includes **p-values**
+2.  Give meaningful labels to each variable.
+
+**Code cell (fill this in):**
+
+```{webr}
+# Exercise 1 solution code (your turn!)
+# Hint: start from the previous examples
+
+```
+
+------------------------------------------------------------------------
+
+# 4. Model Tables with sjPlot (`tab_model()`)
+
+The **sjPlot** package is great for producing tidy tables from regression models.
+
+We’ll fit a **logistic regression** predicting outcome (event vs no event) from treatment and other predictors.
+
+```{webr}
+model1 <- glm(
+  outcome ~ treatment + age + sex + smoker + bmi,
+  data = patients,
+  family = binomial
+)
+
+summary(model1)
+```
+
+The standard `summary()` output is hard to read. Let’s use **sjPlot::tab_model()**.
+
+```{webr}
+tab_model(model1)
+```
+
+This produces:
+
+-   Odds ratios (by default; you can also get log-odds)
+-   Confidence intervals
+-   p-values
+
+### Changing what is displayed
+
+You can customize what you see. For example, show estimates on **log-odds** scale:
+
+```{webr}
+tab_model(
+  model1,
+  transform = NULL,   # show log-odds instead of odds ratios
+  show.ci = TRUE,
+  show.p = TRUE,
+  dv.labels = "Hospitalization (event vs no event)"
+)
+```
+
+### Comparing multiple models
+
+We can fit a second model with fewer predictors and compare side-by-side.
+
+```{webr}
+model2 <- glm(
+  outcome ~ treatment + smoker,
+  data = patients,
+  family = binomial
+)
+
+tab_model(
+  model1,
+  model2,
+  transform = "exp",   # exp = odds ratios
+  dv.labels = c("Full model", "Simpler model"),
+  show.ci = TRUE,
+  show.p = TRUE
+)
+```
+
+### Exercise 2 – Build and tabulate your own model
+
+**Goal:** Fit a model and present it as a table.
+
+1.  Fit a logistic regression model predicting `outcome` using:
+    -   `treatment`
+    -   `age`
+    -   `sex`\
+2.  Use `tab_model()` to display the odds ratios and 95% confidence intervals.
+3.  Give the outcome a meaningful label (e.g., "Adverse event").
+
+**Code cell (fill this in):**
+
+```{webr}
+# Exercise 2 solution code (your turn!)
+
+```
+
+------------------------------------------------------------------------
+
+# 5. “Table 1” Style Tables with table1::table1()
+
+The **table1** package is designed to create classic “Table 1” style baseline tables found in clinical and epidemiologic papers.
+
+## 5.1 Basic usage
+
+The main function is `table1()`.
+
+-   You specify a formula of the form:\
+    `~ var1 + var2 + ... | stratifying_variable`
+-   The right side of `|` is the group variable (optional).
+
+Let’s create a Table 1 of baseline characteristics by **treatment**.
+
+```{webr}
+table1(~ age + sex + smoker + bmi | treatment, data = patients)
+```
+
+This displays:
+
+-   Columns: each treatment group (+ overall by default)
+-   Rows: variables
+-   Summary statistics automatically chosen based on type
+
+## 5.2 Adding labels
+
+You can set labels for variables using the `label()` function.
+
+```{webr}
+label(patients$age)       <- "Age (years)"
+label(patients$sex)       <- "Sex"
+label(patients$smoker)    <- "Current smoker"
+label(patients$bmi)       <- "Body mass index (kg/m²)"
+label(patients$treatment) <- "Treatment arm"
+
+table1(~ age + sex + smoker + bmi | treatment, data = patients)
+```
+
+## 5.3 Customizing continuous variables (optional)
+
+You can customize how continuous variables are summarized using `render.continuous`. For example, showing median and IQR instead of mean and SD.
+
+```{webr}
+my_cont_render <- function(x) {
+  # Remove missing values
+  x <- x[!is.na(x)]
+  sprintf(
+    "%0.1f (%0.1f, %0.1f)",
+    median(x),
+    quantile(x, 0.25),
+    quantile(x, 0.75)
+  )
+}
+
+table1(
+  ~ age + bmi | treatment,
+  data = patients,
+  render.continuous = my_cont_render
+)
+```
+
+*(This level of customization may be beyond what you need in an intro class, but it’s good to see what’s possible.)*
+
+### Exercise 3 – Your own Table 1
+
+**Goal:** Create a baseline-style table comparing smokers vs non-smokers.
+
+1.  Use `label()` to give meaningful labels to:
+    -   `age`, `bmi`, `sex`, `treatment`, `outcome`
+2.  Create a `table1()` table stratified by **smoker** (Yes/No).
+3.  Include **age, bmi, sex, treatment, outcome** in the table.
+
+**Code cell (fill this in):**
+
+```{webr}
+# Exercise 3 solution code (your turn!)
+
+```
+
+------------------------------------------------------------------------
+
+# 6. Putting It All Together – Mini Assignment
+
+In this final section, you will combine all three packages.
+
+### Task A – Descriptive table with gtsummary
+
+Create a gtsummary table that:
+
+1.  Includes **age, sex, smoker, bmi, treatment, outcome**
+2.  Is stratified by **treatment**
+3.  Adds:
+    -   Overall column
+    -   p-values
+4.  Has clear labels for each variable
+
+Put your final table in an object called `tbl_final_gts`.
+
+```{webr}
+# Task A: your code here
+
+```
+
+### Task B – Logistic regression + sjPlot
+
+1.  Fit a logistic regression model:\
+    `outcome ~ treatment + age + bmi + smoker`
+2.  Store the model in an object called `model_final`.
+3.  Use `tab_model()` to show:
+    -   Odds ratios (not log-odds)
+    -   95% confidence intervals
+    -   p-values
+4.  Give the outcome a clear label (e.g., "Clinical event").
+
+```{webr}
+# Task B: your code here
+
+```
+
+### Task C – Table 1 with table1()
+
+1.  Use `label()` to label your variables clearly.
+2.  Create a Table 1-style table showing:
+    -   `age, sex, smoker, bmi, outcome`
+    -   Stratified by **treatment**
+3.  Knit your document and check that:
+    -   The table looks clean
+    -   Variables are well-labeled
+
+```{webr}
+# Task C: your code here
+
+```
+
+------------------------------------------------------------------------
+
+# 7. Reflection Questions (Short Answer in Text)
+
+Add a short paragraph in your own words (no code) **below each bullet**:
+
+1.  In your opinion, when would you choose **gtsummary** vs **table1** for a descriptive table?
+2.  What is one advantage of using **sjPlot::tab_model()** instead of just looking at `summary(model)`?
+3.  How could these tables be useful in a real public health report or manuscript?
+
+*(You can type your answers right in this document below this line.)*
+
+-   **Q1 Answer:**
+
+-   **Q2 Answer:**
+
+-   **Q3 Answer:**
+
+------------------------------------------------------------------------
+
+# 8. (Optional) Exporting Tables
+
+If you have time and want to explore further, you can export tables to Word or HTML.
+
+### Example: Export a gtsummary table to Word
+
+```{webr}
+# Optional: only if you have the "officer" and "flextable" packages installed
+# install.packages("officer")
+# install.packages("flextable")
+
+library(officer)
+library(flextable)
+
+doc <- read_docx()
+doc <- body_add_flextable(doc, as_flex_table(tbl_gts))
+print(doc, target = "gtsummary_table.docx")
+```
+
+You can then open `gtsummary_table.docx` in Word.
+
+------------------------------------------------------------------------
